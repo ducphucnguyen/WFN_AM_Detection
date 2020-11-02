@@ -6,14 +6,21 @@ To run the code: >>MainAMdetection
 
 -----------------------------------
 FFeature.m
+
 SFeature.m
+
 TFeature.m
+
 TFeature_unweighted.m
+
 a1_AM_detection_10sec.m
+
 a2_AM_detection_10sec.m
+
 a3_AM_detection_10sec.m
 
 MainAMdetection.m
+
 Mdl_best.mat
 
 These are the MATLAB code files (.m) for Audio Feature extraction and AM prediction in: 
