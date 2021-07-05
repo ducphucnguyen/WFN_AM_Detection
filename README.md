@@ -1,75 +1,106 @@
-# WFN_AM_Detection
-Detection of wind farm noise amplitude modulation using Random Forest
-
-
-To run the code: >>MainAMdetection
-
------------------------------------
-FFeature.m
-
-SFeature.m
-
-TFeature.m
-
-TFeature_unweighted.m
-
-a1_AM_detection_10sec.m
-
-a2_AM_detection_10sec.m
-
-a3_AM_detection_10sec.m
-
-MainAMdetection.m
-
-Mdl_best.mat
-
-These are the MATLAB code files (.m) for Audio Feature extraction and AM prediction in: 
-
-Nguyen et al. A machine learning based for detecting wind farm noise amplitude modulation, 2020
-
-These files can be opened with a text editor to view, but require MATLAB software to run (http://www.mathworks.com/products/matlab/)
-
-
-Note that: The predictive model may need to train to get the best results!
-
-
-# FreeRay
+# AM detection
 
 [![Build Status](https://travis-ci.com/ducphucnguyen/FreeRay.jl.svg?branch=master)](https://travis-ci.com/ducphucnguyen/FreeRay.jl)
 [![Build Status](https://ci.appveyor.com/api/projects/status/github/ducphucnguyen/FreeRay.jl?svg=true)](https://ci.appveyor.com/project/ducphucnguyen/FreeRay-jl)
 [![Coverage](https://codecov.io/gh/ducphucnguyen/FreeRay.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/ducphucnguyen/FreeRay.jl)
 [![Coverage](https://coveralls.io/repos/github/ducphucnguyen/FreeRay.jl/badge.svg?branch=master)](https://coveralls.io/github/ducphucnguyen/FreeRay.jl?branch=master)
 
-[![Latest Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://ducphucnguyen.github.io/FreeRay.jl/build/)
 
-# FreeRay : Bellhop for Outdoor Sound Propagation
+# AM detection : Random Forest for wind farm noise AM detection
 
-FreeRay.jl is a library for outdoor noise propagation. Numerical ray tracing models are implemented using Bellhop ray tracing program written in Fortran by Michael Porter. FreeRay.jl provides utilities for
+WFN_AM_Detection is a library for detecting AM in wind farm noise. The source code is implemented in Matlab. The classifier may need to retrain with suitable data to get a better performance. This source code provides utilities for
 
-1. Prepare input files, run Bellhop and plot output.
-2. Run Bellhop parallel.
+1. Extract acoustics features
+2. Detect AM for 10-sec audio files (sampling frequency = 8192 Hz)
 
-## Installation
-### FreeRay.jl package
+## Installation and run example
+### Installation
 
-Download [Julia 1.5](https://julialang.org/) or later.
+To clone this repository: Please see instruction in [this link](https://au.mathworks.com/help/matlab/matlab_prog/clone-from-git-repository.html).
 
-FreeRay.jl is under development and thus is not registered. To install it simply open a julia REPL and do
 
-```Julia
-`] add https://github.com/ducphucnguyen/FreeRay.jl.git`.
-```
+### Run example
+There are two audio files with AM ('AM.wav') and without AM ('NoAM'). The output is probability of AM or not AM.
 
-### Installation Bellhop
-Before we can use FreeRay, we need to install Bellhop first. The source code can be download from this website [Bellhop](http://oalib.hlsresearch.com/AcousticsToolbox/). installation details are provided in the website. If you have no experience with programming languages such as C or Fortran, it will take sometime to install Bellhop!
+```Matlab
+clc,clear all, close all
+% This code is used to extract and predic AM
+% Implemented by Phuc NGUYEN, May 2020
+%==========================================================================
 
-To check if Bellhop is successfully installed, we run this command in Julia REPL. If we can see the bellow error, this means that we successfully install Bellhop.  Congratulation!
+% input audio file
+% filename = 'AM.wav';
+filename = 'NoAM.wav';
+[x,Fs] = audioread(filename); % read audio files
 
-```julia
-run(`bellhop`)
+%% Feature Extraction
+% frequency features (Feature 1-13)
+TF = FFeature(x,Fs);
 
-STOP Fatal Error: Check the print file for details
-Process(`bellhop`, ProcessExited(0))
+% Sound indicator features (Features 14-17)
+TS = SFeature(x,Fs);
+
+% time domain features (Features 18-21)
+TT = TFeature(x,Fs);
+
+% time domain features unweighted (Feature 22-27)
+Tex = TFeature_unweighted(x,Fs);
+
+% IOA published features (Feature 28-29)
+Output = [];
+input_band = [50 200; 100 400; 200 800];
+
+for j=1:3 % bandpass filter
+    %y_band = bandpassedge(x,input_band(j,1), input_band(j,2),Fs);
+    y_band = bandpass(x,[input_band(j,1) input_band(j,2)],Fs);
+    [Output_bpass] = a1_AM_detection_10sec(y_band,Fs);
+    
+    if ~isempty(Output_bpass)
+        idband = j;
+        Output_bpass = [table(idband) Output_bpass];
+    end
+    
+    Output = [Output;Output_bpass];
+end
+
+if ~isempty(Output)
+    [PR,idx] = max(Output.C);
+    Fo = Output.Fo_fundamental(idx);
+else
+    PR = 0;
+    Fo = 0;
+end
+
+clear Output Output_bpass
+
+% AMfactor features (Feature 30)
+output = a2_AM_detection_10sec(x,Fs);
+AMfactor = output.AMfactor;
+clear output
+
+% DAM features (Feature 31)
+DAM = a3_AM_detection_10sec(x,Fs);
+
+% combined all publshed feature
+TP = table(PR,Fo,AMfactor,DAM);
+
+%% Combine 31 features
+Tall = [TF TS TT TP Tex];
+
+%% Model Prediction
+load('Mdl_best.mat') % load the predictive model
+
+% class 1 is "AM", class 0 is "NoAM", score(1) is probability of "NoAM" and
+% score(2) is probability of "AM"
+[class,score] = predict(Mdl_best,Tall);
+
+Prob_AM = score(2);
+Prob_NoAM = score(1);
+
+table(Prob_AM,Prob_NoAM)
+
+
+
 ```
 
 
@@ -89,18 +120,16 @@ This software was developed as part of academic research. If you would like to h
 ## Contribution Guidelines
 
 This package is written and maintained by [Duc Phuc Nguyen](https://github.com/ducphucnguyen). Please fork and
-send a pull request or create a [GitHub issue](https://github.com/ducphucnguyen/FreeRay.jl/issues) for
-bug reports. If you are submitting a pull request make sure to follow the official
-[Julia Style Guide](https://docs.julialang.org/en/v1/manual/style-guide/index.html) and please use
-4 spaces and NOT tabs.
+send a pull request or create a [GitHub issue](https://github.com/ducphucnguyen/WFN_AM_Detection/issues) for
+bug reports.
 
 
 ## CURRENT ROADMAP
 
 These are not listed in any particular order
 
-- [X] Run most of outdoor sound propagation problems
-- [X] Plot output: ray, transmission loss
-- [ ] Upgrade for 3D ray tracing using Bellhop3D
-- [ ] Test parallel running
+- [X] Extract important acoustics features
+- [X] Detect AM at distances greater than 1 km in outdoor noise
+- [ ] Develop a model which can detect AM at different conditions
+- [ ] Towards an universal feature extraction rather than handcrafted-features
 
